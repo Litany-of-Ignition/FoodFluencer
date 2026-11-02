@@ -1,0 +1,25 @@
+# Secrets: never commit these
+.env
+*.key
+*API*Key*
+*api*key*
+*.odt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated output and local files
+output/
+*.zip
+*.mp4
+*.mov
+.DS_Store
+
+# Personal photos and results stay local
+input/
+
+# Local archive of other styles
+_archive/
