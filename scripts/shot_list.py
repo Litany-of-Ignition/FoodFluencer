@@ -79,7 +79,10 @@ def direction_text(score=None, note=""):
 
 
 EDIT_WORDS = ("bite", "eat", "chew", "taste", "smile", "grin", "laugh")
-BANNED = ("whip", "crash zoom", "dissolve", "morph", "zoom transition", "match cut")
+# Phrases that mean a camera transition. Whole phrases only, so "whipped cream" is fine.
+BANNED = re.compile(
+    r"\b(whip[- ]?pans?|whip[- ]?zoom|crash[- ]?zooms?|zoom transition|match cut|cross[- ]?dissolves?|"
+    r"dissolves? (?:to|into)|morphs? (?:to|into)|morphing|smash cut)\b", re.I)
 
 
 def list_styles():
@@ -151,8 +154,9 @@ def check(info, meta, shots, max_clip, cuts=1):
         if cuts > 1:
             if prompt_text.count("cut to") != cuts - 1:
                 raise ValueError(f"shot {number} should have {cuts - 1} 'Cut to' cuts")
-            if any(word in prompt_text for word in BANNED):
-                raise ValueError(f"shot {number} uses a transition")
+            found = BANNED.search(shot["video_prompt"])
+            if found:
+                raise ValueError(f"shot {number} uses a transition ({found.group(0)})")
         if cuts > 1:
             # Speech is written inside the timed segments; keep a copy for display.
             shot["spoken"] = re.findall(r'"([^"]+)"', shot["video_prompt"])

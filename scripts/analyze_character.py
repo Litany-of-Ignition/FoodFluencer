@@ -18,7 +18,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 PROMPT_FILE = PROJECT / "prompts" / "character-sheet.md"
-OUTPUT_DIR = PROJECT / "output"
+# The app gives every video its own folder through this setting; by default it is "output".
+OUTPUT_DIR = Path(os.environ.get("FOODFLUENCER_OUTPUT") or PROJECT / "output")
 # Gemini 2.5 Flash was retired on 2026-10-16; this is the replacement Comfy names.
 DEFAULT_MODEL = "vertexai/gemini-3.5-flash"
 MAX_IMAGE_MB = 10

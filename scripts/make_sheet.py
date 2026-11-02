@@ -22,7 +22,7 @@ from analyze_character import analyze, read_image, save_analysis, summarize
 
 PROJECT = Path(__file__).resolve().parent.parent
 PROMPT_FILE = PROJECT / "prompts" / "character-sheet.md"
-OUTPUT_DIR = PROJECT / "output"
+OUTPUT_DIR = Path(os.environ.get("FOODFLUENCER_OUTPUT") or PROJECT / "output")
 # Nano Banana 2. The original Nano Banana is "vertexai/gemini-2.5-flash-image".
 DEFAULT_MODEL = "vertexai/gemini-3.1-flash-image"
 
@@ -152,7 +152,11 @@ def main():
                 info = analyze(image_bytes, mime, client)
                 summarize(info)
                 save_analysis(info)
-                if info.get("status") != "ok":
+                if info.get("status") != "ok" or info.get("image_type") in ("multiple_people", "no_person"):
+                    if info.get("image_type") == "multiple_people":
+                        print("\nProblem: that photo shows more than one person. Use a photo of one person.")
+                    elif info.get("image_type") == "no_person":
+                        print("\nProblem: no person was found in that photo.")
                     sys.exit(1)
                 if info.get("image_type") == "character_sheet" and not args.force:
                     print("\nNothing more to do here: use this image as the character sheet.")

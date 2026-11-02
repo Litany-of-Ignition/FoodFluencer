@@ -9,7 +9,7 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 ## How it works
 
 1. Your photo becomes a character sheet (face, hands, teeth).
-2. A food, as text, a photo, or both, becomes a recipe.
+2. Your food (as text, a photo or both) is described, so the video can show it.
 3. A score from 1 to 10 becomes a 15-second dashcam review, with cuts, speech and sound.
 
 ## Setup
@@ -18,29 +18,31 @@ You need Python 3.10 or newer and your own Comfy API key from <https://platform.
 
 ```
 python -m pip install -r requirements.txt
-setx COMFY_API_KEY "your-key-here"
 ```
 
-Open a new PowerShell window after `setx`.
+The app asks for your key the first time. To run the scripts without the app, set it once with `setx COMFY_API_KEY "your-key-here"` and open a new PowerShell window.
 
 ## Run
 
-Put your photo in `input\`, then:
+```
+python app.py
+```
+
+A page opens in your browser. Add a photo, type a food, pick a score, and press the button. The video is saved in `output\jobs\`.
+
+Or run the steps yourself, with your photo in `input\`:
 
 ```
-python scripts\analyze_character.py input\me.jpg
 python scripts\make_sheet.py input\me.jpg
 python scripts\make_detail_sheet.py input\me.jpg
 python scripts\food_intake.py --text "birria tacos"
 python scripts\shot_list.py --score 3
-python scripts\make_videos.py
+python scripts\make_videos.py --upload input\me.jpg
 ```
-
-The video is saved in `output\clips\`.
 
 ## Cost
 
-About $0.13 per second of video, so a 15-second review is about $2. The character sheets cost about 25 cents, once. Each script shows its cost before spending.
+About $0.13 per second of video, so a 15-second review is about $2. The character sheets cost about 25 cents, once. The app and the scripts show the cost before spending.
 
 ## Notes
 
