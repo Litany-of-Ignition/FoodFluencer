@@ -2,6 +2,8 @@
 
 # FoodFluencer
 
+<img width="1372" height="1816" alt="2026-11-03_06-17" src="https://github.com/user-attachments/assets/83b78310-646c-4bca-b26f-56ce88045d90" />
+
 One photo/video and one food in, a talking food-review video out.
 
 You pick the score. The reviewer gets messier with every bite.
