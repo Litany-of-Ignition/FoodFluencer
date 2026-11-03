@@ -1,4 +1,4 @@
-<img width="1024" height="1024" alt="FoodFluencer Logo new" src="https://github.com/user-attachments/assets/29fa59cb-52d1-4fce-8fd7-f4bf66a8dfbe" />
+<img width="512" height="512" alt="FoodFluencer Logo new" src="https://github.com/user-attachments/assets/29fa59cb-52d1-4fce-8fd7-f4bf66a8dfbe" />
 
 # FoodFluencer
 
