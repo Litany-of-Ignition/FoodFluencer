@@ -16,13 +16,33 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 
 One selfie video in, three reviews out. Same reviewer, different verdicts.
 
-**The input** (a 6-second selfie)
+**The input** (here a 5-second selfie)
+
+
+https://github.com/user-attachments/assets/e00076c8-e9f9-4822-aa51-010f763cb542
+
+
 
 **1 out of 10: burrito bowl**
 
+
+https://github.com/user-attachments/assets/b5ba30af-ff0d-423e-a8ba-4b89d211e76c
+
+
+
 **8 out of 10: double-decker burger**
 
+
+https://github.com/user-attachments/assets/2a179831-7ea5-40d0-a3c1-36a8ec74377c
+
+
+
 **10 out of 10: ice cream sundae**
+
+
+https://github.com/user-attachments/assets/9b73338e-35ab-412c-add9-8806023916a0
+
+
 
 ## Setup
 
