@@ -8,7 +8,7 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 
 ## How it works
 
-1. Your phot becomes a character sheet (face, hands, teeth). Or give it a selfie video, which is used directly for your face and voice.
+1. Your photo becomes a character sheet (face, hands, teeth). Or give it a selfie video, which is used directly for your face and voice.
 2. Your food (as text, a photo or both) is described, so the video can show it.
 3. A score from 1 to 10 becomes a 15-second dashcam review, with cuts, speech and sound.
 
