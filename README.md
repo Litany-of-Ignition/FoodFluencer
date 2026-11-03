@@ -12,6 +12,18 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 2. Your food (as text, a photo or both) is described, so the video can show it.
 3. A score from 1 to 10 becomes a 15-second dashcam review, with cuts, speech and sound.
 
+## Examples
+
+One selfie video in, three reviews out. Same reviewer, different verdicts.
+
+**The input** (a 6-second selfie)
+
+**1 out of 10: burrito bowl**
+
+**8 out of 10: double-decker burger**
+
+**10 out of 10: ice cream sundae**
+
 ## Setup
 
 You need Python 3.10 or newer and your own Comfy API key from <https://platform.comfy.org>.
