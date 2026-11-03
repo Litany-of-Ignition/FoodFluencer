@@ -34,6 +34,14 @@ REFERENCE_NOTE = (
     "Use the attached reference images for the character's exact face, teeth, hands, "
     "hair, clothing and jewelry."
 )
+VIDEO_NOTE = (
+    "Use the person in the attached reference video, and the reference photo of them, as the character: "
+    "their exact face, likeness and voice (timbre, pitch, accent and pace) for every line the character "
+    "speaks. Only their face, likeness and voice come from the reference video. Never show the reference "
+    "video's room, background or props, not even for a moment: every cut, including the last one, stays "
+    "inside the setting described above."
+)
+MAX_REF_VIDEO_MB = 30           # request bodies carry the video encoded as text, so keep it small
 
 
 def newest(pattern):
@@ -85,7 +93,19 @@ def references_for(shot, sheets):
     return paths
 
 
-def build_text(shot, with_scene=False):
+def read_ref_video(path):
+    """Return a data URI for a short selfie video to use as the reference, or exit if it is too big."""
+    path = Path(path)
+    if not path.is_file():
+        sys.exit(f"Could not find the reference video: {path}")
+    megabytes = path.stat().st_size / 1_000_000
+    if megabytes > MAX_REF_VIDEO_MB:
+        sys.exit(f"That video is {megabytes:.0f} MB; the limit here is {MAX_REF_VIDEO_MB} MB. Trim it to 15 seconds or less first.")
+    mime = "video/quicktime" if path.suffix.lower() == ".mov" else "video/mp4"
+    return data_uri(path.read_bytes(), mime)
+
+
+def build_text(shot, with_scene=False, with_video=False):
     parts = [shot["video_prompt"].strip()]
     if shot.get("dialogue"):
         parts.append(f'The character says to camera, in a natural voice: "{shot["dialogue"].strip()}"')
@@ -93,14 +113,16 @@ def build_text(shot, with_scene=False):
         parts.append(f'A calm voiceover says: "{shot["voiceover"].strip()}"')
     if shot.get("audio_direction"):
         parts.append(f"Sound: {shot['audio_direction'].strip()}")
-    parts.append(REFERENCE_NOTE + (SCENE_NOTE if with_scene else ""))
+    parts.append((VIDEO_NOTE if with_video else REFERENCE_NOTE) + (SCENE_NOTE if with_scene else ""))
     return " ".join(parts)
 
 
-def build_body(shot, uris, ratio, with_scene=False):
-    content = [{"type": "text", "text": build_text(shot, with_scene)}]
+def build_body(shot, uris, ratio, with_scene=False, video_uri=None):
+    content = [{"type": "text", "text": build_text(shot, with_scene, bool(video_uri))}]
     for uri in uris:
         content.append({"type": "image_url", "image_url": {"url": uri}, "role": "reference_image"})
+    if video_uri:
+        content.append({"type": "video_url", "video_url": {"url": video_uri}, "role": "reference_video"})
     return {"content": content, "duration": int(shot["clip_seconds"]), "resolution": RESOLUTION, "ratio": ratio}
 
 
@@ -117,6 +139,7 @@ def main():
     parser.add_argument("--upload", help=r"your original upload, e.g. input\Me.jpg (used when it already is a character sheet)")
     parser.add_argument("--sheet", help="character sheet to use (default: your upload if it is a sheet, otherwise the newest one made)")
     parser.add_argument("--detail", help="detail sheet to use (default: the newest one made)")
+    parser.add_argument("--ref-video", help="a selfie video (15s or less): used as the face and voice reference instead of character sheets (pair it with --upload <a photo of the same person>)")
     parser.add_argument("--no-scene", action="store_true", help="ignore the scene reference image")
     parser.add_argument("--yes", action="store_true", help="do not ask before spending")
     parser.add_argument("--redo", action="store_true", help="remake clips that already exist")
@@ -128,10 +151,11 @@ def main():
         sys.exit("Missing output\\shots.json. Run shot_list.py first.")
     plan = json.loads(shots_path.read_text(encoding="utf-8"))
     character = json.loads((OUTPUT_DIR / "character.json").read_text(encoding="utf-8")) if (OUTPUT_DIR / "character.json").is_file() else {}
-    sheets = find_sheets(character, args.upload)
-    if args.sheet:
+    video_uri = read_ref_video(args.ref_video) if args.ref_video else None
+    sheets = {} if video_uri else find_sheets(character, args.upload)   # a selfie video replaces the sheets
+    if args.sheet and not video_uri:
         sheets["character_sheet"] = Path(args.sheet)
-    if args.detail:
+    if args.detail and not video_uri:
         sheets["detail_sheet"] = Path(args.detail)
     for name, path in sheets.items():
         if path and not path.is_file():
@@ -156,6 +180,9 @@ def main():
     for name, path in sheets.items():
         print(f"  {name}: {path if path else 'NOT FOUND'}")
     print(f"  scene: {scene if scene else 'none (run make_scene.py to keep the setting consistent)'}")
+    if video_uri:
+        print(f"  reference video: {args.ref_video}")
+        print(f"  reference photo: {args.upload if args.upload else 'none'}")
     if not args.yes and input("Go ahead and spend that? Type y then Enter: ").strip().lower() != "y":
         sys.exit("Cancelled. Nothing was spent.")
 
@@ -172,7 +199,7 @@ def main():
         for shot in todo:
             number = shot["shot"]
             uris = []
-            for path in references_for(shot, sheets):
+            for path in ([Path(args.upload)] if video_uri and args.upload else [] if video_uri else references_for(shot, sheets)):
                 if path not in cache:
                     cache[path] = data_uri(*shrink(path))
                 uris.append(cache[path])
@@ -180,8 +207,9 @@ def main():
                 if scene not in cache:
                     cache[scene] = data_uri(*shrink(scene))
                 uris = uris + [cache[scene]]
-            body = build_body(shot, uris, ratio, with_scene=bool(scene))
-            print(f"\nShot {number}: {shot['clip_seconds']}s, {len(uris)} reference image(s). Sending (this can take a few minutes)...")
+            body = build_body(shot, uris, ratio, with_scene=bool(scene), video_uri=video_uri)
+            extra = " and the selfie video" if video_uri else ""
+            print(f"\nShot {number}: {shot['clip_seconds']}s, {len(uris)} reference image(s){extra}. Sending (this can take a few minutes)...")
             started = time.time()
             try:
                 result = client.models.run(MODEL, body)

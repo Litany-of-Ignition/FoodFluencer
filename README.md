@@ -8,7 +8,7 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 
 ## How it works
 
-1. Your photo becomes a character sheet (face, hands, teeth).
+1. Your photo becomes a character sheet (face, hands, teeth). Or give it a selfie video, which is used directly for your face and voice.
 2. Your food (as text, a photo or both) is described, so the video can show it.
 3. A score from 1 to 10 becomes a 15-second dashcam review, with cuts, speech and sound.
 
@@ -16,15 +16,16 @@ Built on the Comfy API with MiniMax H3, for the ComfyUI "Open Source Higgsfield"
 
 You need Python 3.10 or newer and your own Comfy API key from <https://platform.comfy.org>.
 
-```
-python -m pip install -r requirements.txt
-```
-
-The app asks for your key the first time. To run the scripts without the app, set it once with `setx COMFY_API_KEY "your-key-here"` and open a new PowerShell window.
+The app asks for your key when it opens. To run the scripts without the app, set it once with `setx COMFY_API_KEY "your-key-here"` and open a new PowerShell window.
 
 ## Run
 
+On Windows, double-click `Start FoodFluencer.bat`. The first time, it installs what the app needs. For a desktop icon, double-click `Add Desktop Shortcut.bat` once.
+
+Or from a terminal:
+
 ```
+python -m pip install -r requirements.txt
 python app.py
 ```
 

@@ -31,13 +31,15 @@ SCRIPTS = PROJECT / "scripts"
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 COST_VIDEO = 2.00        # 15 seconds of H3 plus the small text steps
 COST_NEW_CHARACTER = 0.35  # character sheet and close-up sheet, worst case
+VIDEO_TYPES = {".mp4", ".mov", ".m4v", ".webm"}
+MAX_SELFIE_MB = 30       # the selfie video travels inside the request, so keep it small
 
 STEPS = [
     ("sheet", "Meeting the reviewer (making your character sheet)"),
     ("detail", "Checking your hands and teeth for the mess ahead"),
     ("food", "Reading the menu"),
     ("script", "Writing the review in the parking lot"),
-    ("video", "Setting up the dash camera (about 6 minutes)"),
+    ("video", "Setting up the dash camera (about 10 minutes)"),
 ]
 
 app = Flask(__name__, static_folder=str(PROJECT / "static"), static_url_path="/static")
@@ -47,8 +49,10 @@ JOBS = {}
 RUN_LOCK = threading.Lock()  # one video at a time, so spending stays predictable
 
 
-def new_steps():
-    return [{"key": k, "label": label, "state": "waiting"} for k, label in STEPS]
+def new_steps(selfie=False):
+    """With a selfie video there are no character sheets: the video itself is the reference."""
+    steps = [("sheet", "Watching your selfie video")] + STEPS[2:] if selfie else STEPS
+    return [{"key": k, "label": label, "state": "waiting"} for k, label in steps]
 
 
 def set_step(job, key, state):
@@ -104,6 +108,7 @@ def prepare():
     photo = request.files.get("photo")
     text = (request.form.get("food_text") or "").strip()
     food_photo = request.files.get("food_photo")
+    selfie = request.files.get("video")
     if not photo or not photo.filename:
         return jsonify(error="Add a photo of the reviewer."), 400
     if not text and not (food_photo and food_photo.filename):
@@ -122,20 +127,29 @@ def prepare():
     try:
         photo_path = save_upload(photo, inputs, "photo")
         food_path = save_upload(food_photo, inputs, "food") if food_photo and food_photo.filename else None
+        video_path = None
+        if selfie and selfie.filename:  # the page also sends the whole selfie video; the photo is a frame from it
+            suffix = Path(selfie.filename).suffix.lower()
+            if suffix not in VIDEO_TYPES:
+                raise ValueError("Use an MP4, MOV or WebM video.")
+            video_path = inputs / f"selfie{suffix}"
+            selfie.save(video_path)
+            if video_path.stat().st_size > MAX_SELFIE_MB * 1_000_000:
+                raise ValueError(f"That video is over {MAX_SELFIE_MB} MB. Use a shorter or smaller one.")
     except ValueError as error:
         shutil.rmtree(folder, ignore_errors=True)
         return jsonify(error=str(error)), 400
 
     character_key = file_hash(photo_path)
-    cached = (CHAR_DIR / character_key / "character.json").is_file()
-    cost = COST_VIDEO + (0 if cached else COST_NEW_CHARACTER)
+    cached = not video_path and (CHAR_DIR / character_key / "character.json").is_file()
+    cost = COST_VIDEO + (0 if cached or video_path else COST_NEW_CHARACTER)
     JOBS[job_id] = {
-        "id": job_id, "state": "ready", "steps": new_steps(), "log": [], "error": "", "folder": folder,
-        "photo": photo_path, "food_text": text, "food_photo": food_path, "score": score,
+        "id": job_id, "state": "ready", "steps": new_steps(bool(video_path)), "log": [], "error": "", "folder": folder,
+        "photo": photo_path, "food_text": text, "food_photo": food_path, "video": video_path, "score": score,
         "note": (request.form.get("note") or "").strip(), "character_key": character_key,
         "cached": cached, "started": None,
     }
-    return jsonify(job=job_id, cost=round(cost, 2), cached=cached)
+    return jsonify(job=job_id, cost=round(cost, 2), cached=cached, video=bool(video_path))
 
 
 @app.post("/api/run/<job_id>")
@@ -217,7 +231,15 @@ def worker(job):
     cache = CHAR_DIR / job["character_key"]
     photo = job["photo"]
     try:
-        if job["cached"]:
+        if job["video"]:
+            set_step(job, "sheet", "running")
+            if run_script(job, env, "analyze_character.py", [photo]) != 0:
+                raise RuntimeError(friendly_error(job, work))
+            info = json.loads((work / "character.json").read_text(encoding="utf-8"))
+            if info.get("status") != "ok" or info.get("image_type") in ("multiple_people", "no_person"):
+                raise RuntimeError(friendly_error(job, work))
+            set_step(job, "sheet", "done")
+        elif job["cached"]:
             for item in cache.iterdir():
                 shutil.copy(item, work / item.name)
             job["log"].append("Using the character sheets saved from last time.")
@@ -256,7 +278,10 @@ def worker(job):
         set_step(job, "script", "done")
 
         set_step(job, "video", "running")
-        if run_script(job, env, "make_videos.py", ["--upload", photo, "--yes"]) != 0:
+        args = ["--upload", photo, "--yes"]
+        if job["video"]:
+            args += ["--ref-video", job["video"]]
+        if run_script(job, env, "make_videos.py", args) != 0:
             raise RuntimeError(friendly_error(job, work))
         if not (work / "clips" / "shot_01.mp4").is_file():
             raise RuntimeError("The video did not come back. Open the details below.")

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FoodFluencer</title>
+<link rel="icon" href="/static/logo.jpg">
 <style>
   :root {
     --bg: #eafbff; --card: #ffffff; --ink: #14343b; --muted: #5d7a82; --line: #cfe6ec;
@@ -109,10 +110,16 @@
       <label class="title" for="photo">The reviewer</label>
       <label class="drop" id="photoDrop">
         <img id="photoPreview" alt="">
-        <span class="text" id="photoText">Choose a photo of one person, or drop it here</span>
-        <input type="file" id="photo" accept="image/png,image/jpeg,image/webp">
+        <span class="text" id="photoText">Choose a photo or a selfie video of one person, or drop it here</span>
+        <input type="file" id="photo" accept="image/png,image/jpeg,image/webp,video/*">
       </label>
-      <div class="hint">A normal photo, or a character sheet you already have.</div>
+      <div class="hint">A normal photo, a character sheet you already have, or a selfie video (up to 15 seconds is used).</div>
+      <div id="videoTools" class="hidden">
+        <label class="title" for="frame" style="margin:14px 0 4px">Pick the frame to use</label>
+        <input type="range" id="frame" min="0" max="1" step="0.1" value="0">
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="useVideo" checked> Use the video itself as the reference (keeps your voice)</label>
+        <div class="hint">Skips the character sheets. A video up to 15 seconds and 30 MB works best.</div>
+      </div>
     </div>
 
     <div class="field">
@@ -123,6 +130,7 @@
         <span class="text" id="foodText">Add a photo of the food (optional)</span>
         <input type="file" id="foodPhoto" accept="image/png,image/jpeg,image/webp">
       </label>
+      <button type="button" class="ghost hidden" id="foodClear" style="margin-top:8px;padding:6px 12px;font-size:14px">Remove the food photo</button>
     </div>
 
     <div class="field">
@@ -173,16 +181,78 @@
   function showFile(input, img, text, original) {
     const file = input.files[0];
     if (!file) { img.style.display = "none"; text.textContent = original; return; }
-    img.src = URL.createObjectURL(file); img.style.display = "block"; text.textContent = file.name;
+    text.textContent = file.name;
+    if (file.type.startsWith("video/")) return;  // the frame picker shows the picture
+    img.src = URL.createObjectURL(file); img.style.display = "block";
   }
-  function wireDrop(drop, input, img, text, original) {
-    input.addEventListener("change", () => showFile(input, img, text, original));
+  function wireDrop(drop, input, img, text, original, after) {
+    const changed = () => { showFile(input, img, text, original); if (after) after(); };
+    input.addEventListener("change", changed);
     ["dragenter", "dragover"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add("over"); }));
     ["dragleave", "drop"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove("over"); }));
-    drop.addEventListener("drop", (ev) => { input.files = ev.dataTransfer.files; showFile(input, img, text, original); });
+    drop.addEventListener("drop", (ev) => { input.files = ev.dataTransfer.files; changed(); });
   }
-  wireDrop($("photoDrop"), $("photo"), $("photoPreview"), $("photoText"), "Choose a photo of one person, or drop it here");
-  wireDrop($("foodDrop"), $("foodPhoto"), $("foodPreview"), $("foodText"), "Add a photo of the food (optional)");
+
+  // Selfie video: the page picks a frame in the browser, so no extra software is needed.
+  const selfie = { video: null, frame: null, token: 0 };
+  function resetSelfie() {
+    selfie.token++; selfie.frame = null;
+    $("videoTools").classList.add("hidden");
+  }
+  function grabFrame(video) {
+    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  }
+  function seekTo(video, time) {
+    return new Promise((resolve) => { video.addEventListener("seeked", resolve, { once: true }); video.currentTime = time; });
+  }
+  async function showFrame(token) {
+    const blob = await grabFrame(selfie.video);
+    if (token !== selfie.token) return;
+    selfie.frame = blob;
+    $("photoPreview").src = URL.createObjectURL(blob); $("photoPreview").style.display = "block";
+  }
+  function rejectVideo(message) {
+    $("photo").value = ""; showFile($("photo"), $("photoPreview"), $("photoText"), PHOTO_TEXT);
+    fail($("formError"), message);
+  }
+  async function chooseReviewer() {
+    resetSelfie();
+    const file = $("photo").files[0];
+    if (!file || !file.type.startsWith("video/")) return;
+    const token = selfie.token;
+    $("photoPreview").style.display = "none";
+    if (file.size > 30 * 1000 * 1000) return rejectVideo("That video is " + Math.round(file.size / 1e6) + " MB. Use one under 30 MB (a 15 second selfie is usually fine).");
+    const video = document.createElement("video");
+    video.muted = true; video.playsInline = true; video.preload = "auto"; video.src = URL.createObjectURL(file);
+    const ready = await new Promise((resolve) => {
+      video.addEventListener("loadeddata", () => resolve(true), { once: true });
+      video.addEventListener("error", () => resolve(false), { once: true });
+    });
+    if (token !== selfie.token) return;
+    if (!ready || !video.videoWidth) return rejectVideo("This browser cannot show the picture from that video. Try a photo instead, or Chrome or Edge.");
+    if (video.duration > 15.5) return rejectVideo("That video is " + Math.round(video.duration) + " seconds. Use one that is 15 seconds or less.");
+    $("formError").classList.add("hidden");
+    selfie.video = video;
+    $("frame").max = String(video.duration || 1); $("frame").value = String((video.duration || 1) * 0.3);
+    $("videoTools").classList.remove("hidden");
+    await seekTo(video, Number($("frame").value)); await showFrame(token);
+  }
+  $("frame").addEventListener("input", async () => {
+    if (!selfie.video) return;
+    const token = selfie.token;
+    await seekTo(selfie.video, Number($("frame").value)); await showFrame(token);
+  });
+  const PHOTO_TEXT = "Choose a photo or a selfie video of one person, or drop it here";
+  wireDrop($("photoDrop"), $("photo"), $("photoPreview"), $("photoText"), PHOTO_TEXT, chooseReviewer);
+  const FOOD_TEXT = "Add a photo of the food (optional)";
+  function updateFoodClear() { $("foodClear").classList.toggle("hidden", !$("foodPhoto").files[0]); }
+  function clearFood() { $("foodPhoto").value = ""; showFile($("foodPhoto"), $("foodPreview"), $("foodText"), FOOD_TEXT); updateFoodClear(); }
+  $("foodClear").addEventListener("click", clearFood);
+  wireDrop($("foodDrop"), $("foodPhoto"), $("foodPreview"), $("foodText"), FOOD_TEXT, updateFoodClear);
 
   $("score").addEventListener("input", () => {
     $("scoreNum").textContent = $("score").value; $("scoreWord").textContent = WORDS[$("score").value];
@@ -208,7 +278,12 @@
     event.preventDefault();
     $("formError").classList.add("hidden");
     const data = new FormData();
-    if ($("photo").files[0]) data.append("photo", $("photo").files[0]);
+    const chosen = $("photo").files[0];
+    if (chosen && chosen.type.startsWith("video/")) {
+      if (!selfie.frame) return fail($("formError"), "Still reading the video. Try again in a moment.");
+      data.append("photo", selfie.frame, "selfie.jpg");
+      if ($("useVideo").checked) data.append("video", chosen);
+    } else if (chosen) data.append("photo", chosen);
     if ($("foodPhoto").files[0]) data.append("food_photo", $("foodPhoto").files[0]);
     data.append("food_text", $("food").value);
     data.append("score", $("score").value);
@@ -220,7 +295,8 @@
       if (!reply.ok) return fail($("formError"), body.error || "Something went wrong.");
       jobId = body.job;
       $("confirmText").textContent = "This will spend about $" + body.cost.toFixed(2) + " of your Comfy credits" +
-        (body.cached ? " (your character sheets are already saved)." : " (including making your character sheets).");
+        (body.video ? " (your selfie video is the reference, so no character sheets are made)." :
+         body.cached ? " (your character sheets are already saved)." : " (including making your character sheets).");
       $("confirm").showModal();
     } catch (e) {
       fail($("formError"), "Could not reach the app. Is it still running in PowerShell?");
@@ -259,7 +335,7 @@
     $("player").removeAttribute("src");
   }
   $("retry").addEventListener("click", reset);
-  $("again").addEventListener("click", reset);
+  $("again").addEventListener("click", () => { clearFood(); $("food").value = ""; $("note").value = ""; reset(); });
 </script>
 </body>
 </html>
